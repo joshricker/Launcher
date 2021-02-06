@@ -16,13 +16,12 @@ import com.skcraft.launcher.auth.AccountList;
 import com.skcraft.launcher.auth.LoginService;
 import com.skcraft.launcher.auth.YggdrasilLoginService;
 import com.skcraft.launcher.launch.LaunchSupervisor;
+import com.skcraft.launcher.model.minecraft.Library;
 import com.skcraft.launcher.model.minecraft.VersionManifest;
-import com.skcraft.launcher.model.modpack.LauncherJSON;
-import com.skcraft.launcher.model.modpack.ModJSON;
-import com.skcraft.launcher.model.modpack.ModpackVersion;
 import com.skcraft.launcher.persistence.Persistence;
 import com.skcraft.launcher.swing.SwingHelper;
 import com.skcraft.launcher.update.UpdateManager;
+import com.skcraft.launcher.util.Environment;
 import com.skcraft.launcher.util.HttpRequest;
 import com.skcraft.launcher.util.SharedLocale;
 import com.skcraft.launcher.util.SimpleLogFormatter;
@@ -55,7 +54,7 @@ import static com.skcraft.launcher.util.SharedLocale.tr;
 @Log
 public final class Launcher {
 
-    public static final int PROTOCOL_VERSION = 2;
+    public static final int PROTOCOL_VERSION = 3;
 
     @Getter
     private final ListeningExecutorService executor = MoreExecutors.listeningDecorator(Executors.newCachedThreadPool());
@@ -69,6 +68,7 @@ public final class Launcher {
     @Getter private final LaunchSupervisor launchSupervisor = new LaunchSupervisor(this);
     @Getter private final UpdateManager updateManager = new UpdateManager(this);
     @Getter private final InstanceTasks instanceTasks = new InstanceTasks(this);
+    private final Environment env = Environment.getInstance();
 
     /**
      * Create a new launcher instance with the given base directory.
@@ -91,7 +91,7 @@ public final class Launcher {
     public Launcher(@NonNull File baseDir, @NonNull File configDir) throws IOException {
         SharedLocale.loadBundle("com.skcraft.launcher.lang.Launcher", Locale.getDefault());
 
-        this.baseDir = baseDir;
+        this.baseDir = baseDir.getAbsoluteFile();
         this.properties = LauncherUtils.loadProperties(Launcher.class, "launcher.properties", "com.skcraft.launcher.propertiesFile");
         this.instances = new InstanceList(this);
         this.assets = new AssetsRoot(new File(baseDir, "assets"));
@@ -136,6 +136,15 @@ public final class Launcher {
         if (config.getMaxMemory() <= 0 || configMax >= available - 1) {
             config.setMaxMemory((int) (suggestedMax * 1024));
         }
+    }
+
+    /**
+     * Get the launcher title.
+     *
+     * @return The launcher title.
+     */
+    public String getTitle() {
+        return tr("launcher.appTitle");
     }
 
     /**
@@ -268,6 +277,15 @@ public final class Launcher {
     }
 
     /**
+     * Fetch a library file.
+     * @param library Library to fetch
+     * @return File pointing to the library on disk.
+     */
+    public File getLibraryFile(Library library) {
+        return new File(getLibrariesDir(), library.getPath(env));
+    }
+
+    /**
      * Get the directory to store versions.
      *
      * @return the versions directory
@@ -369,36 +387,6 @@ public final class Launcher {
         return HttpRequest.url(prop(key, args));
     }
 
-    public static URL getMetaURL(String version) throws IOException, InterruptedException {
-        URL url = new URL("https://launchermeta.mojang.com/mc/game/version_manifest.json");
-        LauncherJSON launcherJSON = HttpRequest
-                .get(url)
-                .execute()
-                .expectResponseCode(200)
-                .returnContent()
-                .asJson(LauncherJSON.class);
-        for(ModpackVersion mpVersion : launcherJSON.getVersions()) {
-            if(mpVersion.getID().equalsIgnoreCase(version)) {
-                return new URL(mpVersion.getURL());
-            }
-        }
-        return null;
-    }
-
-    public static String getDownloadURL(String version) throws IOException, InterruptedException {
-        URL url = getMetaURL(version);
-        if(url == null) {
-            return "";
-        }
-        ModJSON modJson = HttpRequest
-                .get(url)
-                .execute()
-                .expectResponseCode(200)
-                .returnContent()
-                .asJson(ModJSON.class);
-        return modJson.getDownloads().getClient().getUrl();
-    }
-    
     /**
      * Show the launcher.
      */
@@ -423,9 +411,10 @@ public final class Launcher {
 
         File dir = options.getDir();
         if (dir != null) {
+            dir = dir.getAbsoluteFile();
             log.info("Using given base directory " + dir.getAbsolutePath());
         } else {
-            dir = new File(".");
+            dir = new File("").getAbsoluteFile();
             log.info("Using current directory " + dir.getAbsolutePath());
         }
 

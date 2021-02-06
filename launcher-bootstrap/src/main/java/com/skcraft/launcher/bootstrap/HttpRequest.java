@@ -33,17 +33,17 @@ public class HttpRequest implements Closeable, ProgressObservable {
     private static final int READ_BUFFER_SIZE = 1024 * 8;
 
     private final Map<String, String> headers = new HashMap<String, String>();
-    private final String method;
+    private String method;
     @Getter
     private final URL url;
     private String contentType;
     private byte[] body;
     private HttpURLConnection conn;
     private InputStream inputStream;
+    private int redirectCount;
 
     private long contentLength = -1;
     private long readBytes = 0;
-    private int maxRedirectFollow = 30;
 
     /**
      * Create a new HTTP request.
@@ -96,55 +96,7 @@ public class HttpRequest implements Closeable, ProgressObservable {
                 throw new IllegalArgumentException("Connection already executed");
             }
 
-            String location = null;
-            URL connectUrl = url;
-
-            for(int redirect = 0; redirect <= maxRedirectFollow; redirect++) {
-                conn        = (HttpURLConnection) reformat(connectUrl).openConnection();
-
-                conn.setConnectTimeout(15000);
-                conn.setReadTimeout(15000);
-                conn.setInstanceFollowRedirects(false);
-                conn.setRequestProperty("User-Agent", "SKCraft Launcher");
-
-                if (location == null && body != null) {
-                    conn.setRequestProperty("Content-Type", contentType);
-                    conn.setRequestProperty("Content-Length", Integer.toString(body.length));
-                    conn.setDoInput(true);
-                }
-
-                for (Map.Entry<String, String> entry : headers.entrySet()) {
-                    conn.setRequestProperty(entry.getKey(), entry.getValue());
-                }
-
-                if (location == null) {
-                    conn.setRequestMethod(method);
-                }
-                conn.setUseCaches(false);
-                conn.setDoOutput(true);
-                conn.setReadTimeout(READ_TIMEOUT);
-
-                conn.connect();
-
-                if (location == null && body != null) {
-                    DataOutputStream out = new DataOutputStream(conn.getOutputStream());
-                    out.write(body);
-                    out.flush();
-                    out.close();
-                }
-
-                switch (conn.getResponseCode())
-                {
-                    case HttpURLConnection.HTTP_MOVED_PERM:
-                    case HttpURLConnection.HTTP_MOVED_TEMP:
-                        location   = conn.getHeaderField("Location");
-                        location   = URLDecoder.decode(location, "UTF-8");
-                        connectUrl = new URL(connectUrl, location);
-                        continue;
-                }
-
-                break;
-            }
+            conn = this.runRequest(url);
 
             inputStream = conn.getResponseCode() == HttpURLConnection.HTTP_OK ?
                     conn.getInputStream() : conn.getErrorStream();
@@ -157,6 +109,60 @@ public class HttpRequest implements Closeable, ProgressObservable {
         }
 
         return this;
+    }
+
+    private HttpURLConnection runRequest(URL url) throws IOException {
+        if (redirectCount > 20) {
+            throw new IOException("Too many redirects!");
+        }
+
+        HttpURLConnection conn = (HttpURLConnection) reformat(url).openConnection();
+        conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Java) SKMCLauncher");
+        conn.setInstanceFollowRedirects(false);
+
+        if (body != null) {
+            conn.setRequestProperty("Content-Type", contentType);
+            conn.setRequestProperty("Content-Length", Integer.toString(body.length));
+            conn.setDoInput(true);
+        }
+
+        for (Map.Entry<String, String> entry : headers.entrySet()) {
+            conn.setRequestProperty(entry.getKey(), entry.getValue());
+        }
+
+        conn.setRequestMethod(method);
+        conn.setUseCaches(false);
+        conn.setDoOutput(true);
+        conn.setReadTimeout(READ_TIMEOUT);
+
+        conn.connect();
+
+        if (body != null) {
+            DataOutputStream out = new DataOutputStream(conn.getOutputStream());
+            out.write(body);
+            out.flush();
+            out.close();
+        }
+
+        switch (conn.getResponseCode()) {
+            case HttpURLConnection.HTTP_SEE_OTHER:
+                method = "GET";
+                body = null;
+            case HttpURLConnection.HTTP_MOVED_PERM:
+            case HttpURLConnection.HTTP_MOVED_TEMP:
+            case HttpURLConnection.HTTP_ACCEPTED:
+            case 307:
+            case 308:
+                String location = conn.getHeaderField("Location");
+                location = URLDecoder.decode(location, "UTF-8");
+                redirectCount++;
+
+                return runRequest(new URL(this.url, location));
+            default:
+                break;
+        }
+
+        return conn;
     }
 
     /**

@@ -21,14 +21,14 @@ import lombok.Data;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class Configuration {
 
-    private boolean offlineEnabled = true;
+    private boolean offlineEnabled = false;
     private String jvmPath;
     private String jvmArgs;
     private int minMemory = 1024;
     private int maxMemory = 0; // Updated in Launcher
     private int permGen = 256;
     private int windowWidth = 854;
-    private int widowHeight = 480;
+    private int windowHeight = 480;
     private boolean proxyEnabled = false;
     private String proxyHost = "localhost";
     private int proxyPort = 8080;
@@ -49,4 +49,10 @@ public class Configuration {
         return super.hashCode();
     }
 
+    /**
+     * Backwards compatibility for old configs with the misspelling.
+     */
+    public void setWidowHeight(int height) {
+        this.windowHeight = height;
+    }
 }

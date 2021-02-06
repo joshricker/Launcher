@@ -29,7 +29,7 @@ public class LaunchOptions {
 
         private Window window = null;
         private Instance instance;
-        private UpdatePolicy updatePolicy = UpdatePolicy.ALWAYS_UPDATE;
+        private UpdatePolicy updatePolicy = UpdatePolicy.UPDATE_IF_SESSION_ONLINE;
         private LaunchListener listener = new DummyLaunchListener();
         private Session session;
 
