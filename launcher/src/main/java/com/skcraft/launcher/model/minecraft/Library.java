@@ -8,8 +8,7 @@ package com.skcraft.launcher.model.minecraft;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.google.common.base.Joiner;
-import com.google.common.base.Splitter;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.google.common.collect.Lists;
 import com.skcraft.launcher.util.Environment;
 import lombok.Data;
@@ -23,7 +22,7 @@ import java.util.Map;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class Library {
 
-    private String name;
+    private MavenName name;
     private Downloads downloads;
     private Map<String, String> natives;
     private Extract extract;
@@ -33,7 +32,8 @@ public class Library {
     private String comment;
 
     // Custom
-    private boolean locallyAvailable;
+    @JsonInclude(value = JsonInclude.Include.NON_DEFAULT)
+    private boolean generated;
 
     public boolean matches(Environment environment) {
         boolean allow = false;
@@ -102,7 +102,7 @@ public class Library {
                 // BACKWARDS COMPATIBILITY: make up a virtual artifact
                 Artifact virtualArtifact = new Artifact();
                 virtualArtifact.setUrl(getDownloads().getArtifact().getUrl());
-                virtualArtifact.setPath(mavenNameToPath(name + ":" + nativeString));
+                virtualArtifact.setPath(MavenName.from(name + ":" + nativeString).getFilePath());
 
                 return virtualArtifact;
             }
@@ -126,8 +126,9 @@ public class Library {
 
         EqualsBuilder builder = new EqualsBuilder();
         builder.append(name, library.getName());
-        // If libraries have different natives lists, they should be separate.
+        // If libraries have different natives or environment rules, they should be separate.
         builder.append(natives, library.getNatives());
+        builder.append(rules, library.getRules());
 
         return builder.isEquals();
     }
@@ -191,7 +192,7 @@ public class Library {
 
         virtualArtifact.setUrl(url);
         if (getName() != null) {
-            virtualArtifact.setPath(mavenNameToPath(getName()));
+            virtualArtifact.setPath(name.getFilePath());
         }
 
         Downloads downloads = new Downloads();
@@ -201,7 +202,7 @@ public class Library {
     }
 
     public void setName(String name) {
-        this.name = name;
+        this.name = MavenName.from(name);
 
         // [DEEP SIGH]
         // Sometimes 'name' comes after 'url', and I can't figure out how to get Jackson to enforce order
@@ -210,7 +211,7 @@ public class Library {
             if (getDownloads().getArtifact() == null) return;
 
             if (getDownloads().getArtifact().getPath() == null) {
-                getDownloads().getArtifact().setPath(mavenNameToPath(name));
+                getDownloads().getArtifact().setPath(this.name.getFilePath());
             }
         }
     }
@@ -226,32 +227,11 @@ public class Library {
         }
     }
 
-    public static String mavenNameToPath(String mavenName) {
-        List<String> split = Splitter.on(':').splitToList(mavenName);
-        int size = split.size();
-
-        String group = split.get(0);
-        String name = split.get(1);
-        String version = split.get(2);
-        String extension = "jar";
-
-        String fileName = name + "-" + version;
-
-        if (size > 3) {
-            String classifier = split.get(3);
-
-            if (classifier.indexOf("@") != -1) {
-                List<String> parts = Splitter.on('@').splitToList(classifier);
-
-                classifier = parts.get(0);
-                extension = parts.get(1);
-            }
-
-            fileName += "-" + classifier;
-        }
-
-        fileName += "." + extension;
-
-        return Joiner.on('/').join(group.replace('.', '/'), name, version, fileName);
+    /**
+     * @param mavenName Maven name of a library
+     * @return True if this library is named 'mavenName'.
+     */
+    public boolean matches(String mavenName) {
+        return this.name.equals(MavenName.from(mavenName));
     }
 }

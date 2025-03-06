@@ -105,7 +105,7 @@ public final class Launcher {
             }
         });
 
-        updateManager.checkForUpdate();
+        updateManager.checkForUpdate(null);
     }
 
     /**
@@ -113,16 +113,16 @@ public final class Launcher {
      */
     public void setDefaultConfig() {
         double configMax = config.getMaxMemory() / 1024.0;
-        double suggestedMax = 8;
+        double suggestedMax = 2;
         double available = Double.MAX_VALUE;
 
         try {
             OperatingSystemMXBean bean = (OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();
             available = bean.getTotalPhysicalMemorySize() / 1024.0 / 1024.0 / 1024.0;
-            if (available <= 8) {
-                suggestedMax = available * 0.75;
+            if (available <= 6) {
+                suggestedMax = available * 0.48;
             } else {
-                suggestedMax = 8;
+                suggestedMax = 4;
             }
         } catch (Exception ignored) {
         }
@@ -401,8 +401,11 @@ public final class Launcher {
     /**
      * Show the launcher.
      */
-    public void showLauncherWindow() {
-        mainWindowSupplier.get().setVisible(true);
+    public Window showLauncherWindow() {
+        Window window = mainWindowSupplier.get();
+        window.setVisible(true);
+
+        return window;
     }
 
     /**

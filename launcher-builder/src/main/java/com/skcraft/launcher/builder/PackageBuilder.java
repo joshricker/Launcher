@@ -125,7 +125,8 @@ public class PackageBuilder {
     public void addLoaders(File dir, File librariesDir) {
         logSection("Checking for mod loaders to install...");
 
-        LinkedHashSet<Library> collected = new LinkedHashSet<Library>();
+        VersionManifest version = manifest.getVersionManifest();
+	    LinkedHashSet<Library> collected = new LinkedHashSet<>();
 
         File[] files = dir.listFiles(new JarFileFilter());
         if (files != null) {
@@ -140,7 +141,6 @@ public class PackageBuilder {
 
         this.loaderLibraries.addAll(collected);
 
-        VersionManifest version = manifest.getVersionManifest();
         collected.addAll(version.getLibraries());
         version.setLibraries(collected);
     }
@@ -164,7 +164,7 @@ public class PackageBuilder {
 
                 if (basicProfile.isLegacy()) {
                     processor = new OldForgeLoaderProcessor();
-                } else if (basicProfile.getProfile().equalsIgnoreCase("forge")) {
+                } else {
                     processor = new ModernForgeLoaderProcessor();
                 }
             } else if (BuilderUtils.getZipEntry(jarFile, "fabric-installer.json") != null) {
